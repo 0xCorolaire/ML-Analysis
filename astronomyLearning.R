@@ -5,11 +5,12 @@ library(caret)
 library(corrplot)
 
 data <- read.csv(file="astronomy_train.csv", header = TRUE, sep = ",")
+
 head(data)
 nbdata <- nrow(data)
 
 createDataPartition <- function(data, nb) {
-  set.seed(129)
+  set.seed(1729)
   smp_size <- floor(0.80 * nb)
   train_ind <- sample(seq_len(nb), size = smp_size)
   train <- data[train_ind,]
@@ -36,6 +37,9 @@ cbind(freq=table(data$class), percentage=percentage)
 uselessName <- c("rerun", "objid", "specobjid")
 #dropping useless column
 data <- data[,!names(data) %in% uselessName]
+
+data$class <- as.factor(data$class)
+
 outputData <- data[,11]
 predictorData <- data[,-11]
 
@@ -55,16 +59,15 @@ trainAndTest <- createDataPartition(data, nbdata)
 train.data <- trainAndTest$train
 test.data <- trainAndTest$test
 
-train.data[]
 
-fit.lda <- lda(class ~ ., trainAndTest$train)
+fit.lda <- lda(class ~ ., train.data)
 
-pred.lda <- predict(fit.lda, newdata=as.data.frame(test.data))
+pred.lda <- predict(fit.lda, newdata=test.data)
 
 conf.lda <- table(test.data$class, pred.lda$class)
 
 err.lda <- 100-accuracy(conf.lda)
-err.lda #11%
+err.lda #8.8%
 
 
 
