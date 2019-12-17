@@ -2,21 +2,33 @@ library(MASS)
 library(leaps)
 library(kernlab)
 library(caret)
+library(tidyverse)
 library(corrplot)
-
+library(naivebayes)
+library(randomForest)
+library(car)
+library(glmnet)
+library(mclust)
+library(upclass)
+library(klaR)
+library(mda)
+library(fda)
+#---------------------------------------------
 data <- read.csv(file="astronomy_train.csv", header = TRUE, sep = ",")
 
 head(data)
+
+indSc <- sapply(data, is.numeric)
+data[indSc] <- lapply(data[indSc], scale)
 nbdata <- nrow(data)
 
 createDataPartition <- function(data, nb) {
-  set.seed(1729)
   smp_size <- floor(0.80 * nb)
   train_ind <- sample(seq_len(nb), size = smp_size)
   train <- data[train_ind,]
   test <- data[-train_ind,]
   train
-  returnList <- list("train" = train, "test" = test)
+  returnList <- list("train" = train, "test" = test, "smp_ind" = train_ind)
   return(returnList)
 }
 
@@ -52,32 +64,239 @@ plot(outputData)
 featurePlot(x=predictorData, y=outputData, plot="box")
 
 #first pass through different algorithm
-#KNN, LDA, QDA, LOGIC REG, RANDOM FOREST, SVM
+#KNN, LDA, QDA, LOGIC REG, RANDOM FOREST, BAGGING SVM
 
-
+###A LDA
+#LDA s'utilise principalement quand on considere que les classes ont une matrice de covariance identique.
+#on aura sans doute pas un bon taux d'erreur
 trainAndTest <- createDataPartition(data, nbdata)
 train.data <- trainAndTest$train
 test.data <- trainAndTest$test
-
+indic <- trainAndTest$smp_ind
 
 fit.lda <- lda(class ~ ., train.data)
 
-pred.lda <- predict(fit.lda, newdata=test.data)
+pred.lda <- predict(fit.lda, newdata=test.data[,-11])
 
 conf.lda <- table(test.data$class, pred.lda$class)
 
 err.lda <- 100-accuracy(conf.lda)
 err.lda #8.8%
 
+###B Naivesb
+fit.naive <- naive_bayes(class~.,data=train.data)
+pred.naive <- predict(fit.naive,newdata=test.data[,-11])
+
+conf.naive <- table(test.data$class, pred.naive)
+
+err.naive <- 100-accuracy(conf.naive)
+err.naive #3.5%
+
+### C randomForst and Bagging
+bagg.fit = randomForest(class ~.,data=data, subset = indic,mtry=ncol(data) - 1)
+rf.fit = randomForest(class ~.,data=data, subset = indic,mtry=4)
+yhat1 = predict(bagg.fit,newdata=data[-indic,],type="response")
+yhat2 = predict(rf.fit,newdata=data[-indic,],type="response")
+
+table(test.data$class,yhat1)
+table(test.data$class,yhat2)
+1 - mean(test.data$class==yhat1)
+1 - mean(test.data$class==yhat2)
+#error of 1% very good
+
+### D SVM
+fit.svm <- ksvm(class ~., kernel="rbfdot", C=1, data=train.data)
+pred.svm <- predict(fit.svm, newdata=test.data[,-11], type="response")
+mean(test.data$class!=pred.svm)
+#6.3% err
+
+### E GMM
+Xgmm <- as.matrix(data[,-11])
+cl <- as.matrix(data[,11])
+Cltrain = cl[indic,]
+Xtrain = Xgmm[indic,]
+
+Xtest <- Xgmm[-indic,]
+Cltest <- cl[-indic,]
+
+models <- c('EII','VII','VEI','VVV','EEE')
+fitup <- upclassify(Xtrain, Cltrain, Xtest, modelscope = models)
+fitup$Best$modelName #VVV
+gmm.fit <- Mclust(data)
+plot(gmm.fit)
+
+mod2 <- MclustDA(Xtrain, Cltrain)
+summary(mod2, newdata = Xtest, newclass=Cltest)
+mod3 <- MclustDA(Xtrain, Cltrain, modelType = "EDDA")
+summary(mod3)
+
+cv <- cvMclustDA(mod2, nfold = 10)
+str(cv)
+unlist(cv[3:4])
+#3.2% error with MclustDA normal
+cv <- cvMclustDA(mod3, nfold = 10)
+str(cv)
+unlist(cv[3:4])
+#1,8% error with EDDA
 
 
+#Model selection
+transformation <- function(X, degree=2, orthogonal.poly=TRUE){
+  features.poly <- paste("+ poly(", names(X), ", degree=", degree,", 
+                          raw=", !orthogonal.poly, ")", sep="", collapse = " ")
+  features.log  <- paste("+ log(", names(X), ")", sep="", collapse = " ")
+  features.exp.log <- paste("+ I(exp(", names(X), ")*log(", names(X), "))", sep="", collapse = " ")
+  features <- paste(features.poly, features.exp.log, features.log, sep="")
+  formule <- paste("~ -1 ", features)
+  X.transform <- model.matrix(as.formula(formule), data = X)
+  colnames(X.transform) <- paste("X", 1:ncol(X.transform), sep='')
+  attr(X.transform, "assign") <- NULL
+  return(X.transform)
+}
 
 
+##Regsubset
+regsubset <- regsubsets(class ~ ., data=data, method = "exhaustive", nvmax = 14)
+plot(regsubset, scale = "r2")
+plot(regsubset, scale = "bic")
+regsub.sum <- summary(regsubset)
+regsub.sum
+data.frame(
+  Adj.R2 = which.max(regsub.sum$adjr2),
+  BIC = which.min(regsub.sum$bic)
+)
+
+get_model_formula <- function(id, object, outcome){
+  # get models data
+  models <- summary(object)$which[id,-1]
+  # Get outcome variable
+  #form <- as.formula(object$call[[2]])
+  #outcome <- all.vars(form)[1]
+  # Get model predictors
+  predictors <- names(which(models == TRUE))
+  predictors <- paste(predictors, collapse = "+")
+  # Build model formula
+  as.formula(paste0(outcome, "~", predictors))
+}
+
+#get_model_formula(11, regsubset, "class")
+best_models <- c(get_model_formula(10, regsubset, "class"), get_model_formula(11, regsubset, "class"))
+
+###LDA + regsubset + K-FOLD
+err = rep(0,20)
+err_mat = c()
+K=10 
+for (f in (1:2)) {
+  for (l in (1:20)){
+    folds=sample(1:K,nrow(data),replace = TRUE)
+    CV <- rep(0,10)
+    for (k in (1:K)){
+      lda.cv <- lda(best_models[[f]], data = data[folds!=k,])
+      pred.cv <- predict(lda.cv, newdata = data[folds==k,])
+      confusion.cv <- table(data[folds==k,]$class, pred.cv$class)
+      CV[k] <- 1-sum(diag(confusion.cv))/nrow(data[folds==k,])
+    }
+    err[l] <- mean(CV)
+  }
+  err_mat <- cbind(err_mat, err)
+  print(best_models[[f]])
+  print(mean(err))
+}
+boxplot(err_mat)
+##Error => 9.3% pour formula 11 ---- Overfitting bad for LDA
+
+### Naives Bayes + regsub + K-FOLD
+err = rep(0,20)
+err_mat = c()
+K=10 
+for (f in (1:2)) {
+  for (l in (1:20)){
+    folds=sample(1:K,nrow(data),replace = TRUE)
+    CV <- rep(0,10)
+    for (k in (1:K)){
+      naive_bayes.cv <- naive_bayes(best_models[[f]], data = data[folds!=k,])
+      pred.cv <- predict(naive_bayes.cv, newdata = data[folds==k,])
+      confusion.cv <- table(data[folds==k,]$class, pred.cv)
+      CV[k] <- 1-sum(diag(confusion.cv))/nrow(data[folds==k,])
+    }
+    err[l] <- mean(CV)
+  }
+  err_mat <- cbind(err_mat, err)
+  print(best_models[[f]])
+  print(mean(err))
+}
+boxplot(err_mat)
+# err best with formula 11, et variance faibl e=> bon compromis bias var ~~ 3.56% err
+
+### SVM + regsub + K fold with polydot or rbfdot or vanilladot
+err = rep(0,20)
+err_mat = c()
+K=10 
+for (f in (1:2)) {
+  for (l in (1:20)){
+    folds=sample(1:K,nrow(data),replace = TRUE)
+    CV <- rep(0,10)
+    for (k in (1:K)){
+      svm.cv <- ksvm(best_models[[f]], kernel="polydot", C=1, data = data[folds!=k,])
+      pred.cv <- predict(svm.cv, newdata = data[folds==k,], type="response")
+      confusion.cv <- table(data[folds==k,]$class, pred.cv)
+      CV[k] <- 1-sum(diag(confusion.cv))/nrow(data[folds==k,])
+    }
+    err[l] <- mean(CV)
+  }
+  err_mat <- cbind(err_mat, err)
+  print(best_models[[f]])
+  print(mean(err))
+}
+boxplot(err_mat)
+# best with formula 10 and polydot => 1.9% error
 
 
+### Regularization
 
+# RDA  
+errRDA <- rep(0,20) 
+err_mat = c()
+for (f in (1:2)) {
+  for (k in (1:20)){
+    trainAndTest <- createDataPartition(data, nbdata)
+    train.data <- trainAndTest$train
+    test.data <- trainAndTest$test
+    indic <- trainAndTest$smp_ind
+    fit.rda <- rda(best_models[[f]], data = train.data, gamma = 0.05, lambda = 0.2)
+    predictions <- fit.rda %>% predict(test.data[,-11])
+    errRDA[k] <- 1 - mean(predictions$class == test.data$class)
+  }
+  print(best_models[[f]])
+  print(mean(err))
+}
+# very bad without best models in (10% error), but 3.6% for models 11 and 10
 
+### ACP PCA
+pca<-princomp(data[,-11])
+Z <- pca$scores
+lambda<-pca$sdev^2
+pairs(Z[,1:14],col=data[,11])
 
+plot(cumsum(lambda)/sum(lambda),type="l",xlab="q",ylab="proportion of explained variance")
+q<-100
+X2<-scale(pca$x[,1:q])
 
+plot(cumsum(lambda)/sum(lambda),type="l",xlab="q",ylab="proportion of explained variance")
+q <- 9
+X2<-scale(Z[,1:q])
+  # svm a noyau finding of C best with CV
+# SVM avec noyau linéaire
+# Réglage de C par validation croisée
 
-
+CC<-c(0.001,0.01,0.1,1,10,100,1000,10e4)
+N<-length(CC)
+M<-10 # nombre de répétitions de la validation croisée
+err<-matrix(0,N,M)
+for(k in 1:M){
+  for(i in 1:N){
+    err[i,k]<-cross(ksvm(x=X.train,y=z.train,type="C-svc",kernel="vanilladot",C=CC[i],cross=5))
+  }
+}
+Err<-rowMeans(err)
+plot(CC,Err,type="b",log="x",xlab="C",ylab="CV error")
