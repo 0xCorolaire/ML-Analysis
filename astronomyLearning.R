@@ -2,6 +2,7 @@ library(MASS)
 library(leaps)
 library(kernlab)
 library(caret)
+library(e1071)
 library(tidyverse)
 library(corrplot)
 library(naivebayes)
@@ -236,7 +237,7 @@ for (f in (1:2)) {
     folds=sample(1:K,nrow(data),replace = TRUE)
     CV <- rep(0,10)
     for (k in (1:K)){
-      svm.cv <- ksvm(best_models[[f]], kernel="polydot", ,kpar="automatic", C=1, data = data[folds!=k,])
+      svm.cv <- ksvm(best_models[[f]], kernel="polydot",kpar="automatic", C=1, data = data[folds!=k,])
       pred.cv <- predict(svm.cv, newdata = data[folds==k,], type="response")
       confusion.cv <- table(data[folds==k,]$class, pred.cv)
       CV[k] <- 1-sum(diag(confusion.cv))/nrow(data[folds==k,])
@@ -248,8 +249,14 @@ for (f in (1:2)) {
   print(mean(err))
 }
 boxplot(err_mat)
-# best with formula 10 and polydot => 1.9% error
-
+# best with formula 10 and polydot, kpar=list(degree=3,scale=2, offset=2) => 1.4% error
+svm.cv <- ksvm(best_models[[1]], kernel="polydot" ,kpar=list(degree=3,scale=2, offset = 2), C=0.1, data = train.data)
+pred.cv <- predict(svm.cv, newdata = test.data[,-11], type="response")
+confusion.cv <- table(test.data$class, pred.cv)
+errSVM <- 1-sum(diag(confusion.cv))/nrow(test.data)
+errSVM
+svm.cv
+#training error of 0.7% and 1% on test mais compliquer à interpreter cependant.
 
 ### Regularization
 
@@ -283,8 +290,6 @@ X2<-scale(Z[,1:q])
 # SVM avec noyau linéaire
 # Réglage de C par validation croisée
 y<-as.factor(data[,11])
-length(y)
-nrow(X2)
 ##TO FINISH PCA
 
 
