@@ -75,7 +75,6 @@ test.data <- trainAndTest$test
 indic <- trainAndTest$smp_ind
 
 fit.lda <- lda(class ~ ., train.data)
-
 pred.lda <- predict(fit.lda, newdata=test.data[,-11])
 
 conf.lda <- table(test.data$class, pred.lda$class)
@@ -237,7 +236,7 @@ for (f in (1:2)) {
     folds=sample(1:K,nrow(data),replace = TRUE)
     CV <- rep(0,10)
     for (k in (1:K)){
-      svm.cv <- ksvm(best_models[[f]], kernel="polydot", C=1, data = data[folds!=k,])
+      svm.cv <- ksvm(best_models[[f]], kernel="polydot", ,kpar="automatic", C=1, data = data[folds!=k,])
       pred.cv <- predict(svm.cv, newdata = data[folds==k,], type="response")
       confusion.cv <- table(data[folds==k,]$class, pred.cv)
       CV[k] <- 1-sum(diag(confusion.cv))/nrow(data[folds==k,])
@@ -277,26 +276,67 @@ pca<-princomp(data[,-11])
 Z <- pca$scores
 lambda<-pca$sdev^2
 pairs(Z[,1:14],col=data[,11])
-
-plot(cumsum(lambda)/sum(lambda),type="l",xlab="q",ylab="proportion of explained variance")
-q<-100
-X2<-scale(pca$x[,1:q])
-
 plot(cumsum(lambda)/sum(lambda),type="l",xlab="q",ylab="proportion of explained variance")
 q <- 9
 X2<-scale(Z[,1:q])
   # svm a noyau finding of C best with CV
 # SVM avec noyau linéaire
 # Réglage de C par validation croisée
+y<-as.factor(data[,11])
+length(y)
+nrow(X2)
+##TO FINISH PCA
 
-CC<-c(0.001,0.01,0.1,1,10,100,1000,10e4)
-N<-length(CC)
-M<-10 # nombre de répétitions de la validation croisée
-err<-matrix(0,N,M)
-for(k in 1:M){
-  for(i in 1:N){
-    err[i,k]<-cross(ksvm(x=X.train,y=z.train,type="C-svc",kernel="vanilladot",C=CC[i],cross=5))
+
+## CCL for astronomy => randomForest with mtry = sqrt(p) = 4 best with 1% err
+err = rep(0,20)
+err_mat = c()
+K=10 
+for (f in (1:2)) {
+  for (l in (1:20)){
+    folds=sample(1:K,nrow(data),replace = TRUE)
+    CV <- rep(0,10)
+    for (k in (1:K)){
+      randomForest.cv <- randomForest(best_models[[f]], data = data[folds!=k,], mtry=4)
+      pred.cv <- predict(randomForest.cv, newdata = data[folds==k,], type = "response")
+      confusion.cv <- table(data[folds==k,]$class, pred.cv)
+      CV[k] <- 1-sum(diag(confusion.cv))/nrow(data[folds==k,])
+    }
+    err[l] <- mean(CV)
   }
+  err_mat <- cbind(err_mat, err)
+  print(best_models[[f]])
+  print(mean(err))
 }
-Err<-rowMeans(err)
-plot(CC,Err,type="b",log="x",xlab="C",ylab="CV error")
+boxplot(err_mat)
+#model 10 with 1.01% err
+
+#build model and find best mtry
+err = rep(0,14)
+err_mat = c()
+K=10 
+for (l in (1:14)){
+  folds=sample(1:K,nrow(data),replace = TRUE)
+  CV <- rep(0,10)
+  for (k in (1:K)){
+    randomForest.cv <- randomForest(best_models[[1]], data = data[folds!=k,], mtry=l)
+    pred.cv <- predict(randomForest.cv, newdata = data[folds==k,], type = "response")
+    confusion.cv <- table(data[folds==k,]$class, pred.cv)
+    CV[k] <- 1-sum(diag(confusion.cv))/nrow(data[folds==k,])
+  }
+  err[l] <- mean(CV)
+}
+boxplot(err)
+err #4
+
+
+randomForest.m1 <- randomForest(best_models[[1]], data = train.data, mtry=4)
+pred.cv <- predict(randomForest.m1, newdata = test.data[,-11], type = "response")
+confusion.cv <- table(test.data$class, pred.cv)
+err <- 1 - sum(diag(confusion.cv))/nrow(test.data)
+err
+#0.9%
+plot(randomForest.m1)
+randomForest.m1
+
+
