@@ -278,7 +278,7 @@ for (f in (1:2)) {
 }
 # very bad without best models in (10% error), but 3.6% for models 11 and 10
 
-### ACP PCA
+### ACP - PCA
 pca<-princomp(data[,-11])
 Z <- pca$scores
 lambda<-pca$sdev^2
@@ -292,6 +292,8 @@ X2<-scale(Z[,1:q])
 y<-as.factor(data[,11])
 ##TO FINISH PCA
 
+
+## FDA A FAIRE
 
 ## CCL for astronomy => randomForest with mtry = sqrt(p) = 4 best with 1% err
 err = rep(0,20)
