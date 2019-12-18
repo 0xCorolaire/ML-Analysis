@@ -138,6 +138,8 @@ for(a in (1:nAlpha)) {
 }
 err
 
+
+
 ##PCR
 pcr.fit <- pcr(yield_anomaly~., data=data.frame(train.data), scale=TRUE, validation="CV")
 summary(pcr.fit)
