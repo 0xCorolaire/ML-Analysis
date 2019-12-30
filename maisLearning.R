@@ -239,11 +239,56 @@ print(MSE)
 #0.632 modele 1 - rbfdot Cost = 1 ; sigma = 0.0291
 
 
+#laplaciankernel 
+# err of 0.56XX   CC find then sigma
+MSElaplace <- rep(0,length(models))
+for (m in (1:length(models))) {
+  S<-c(0.05,0.06, 0.07, 0.08, 0.09)
+  N<-length(S)
+  err<-rep(0,N)
+  for(i in 1:N) {
+    svmfitC <- ksvm(models[[m]], data = train, kernel = "laplacedot", C=10, cross=5, kpar=list(sigma=S[i]))
+    predict <- predict(svmfitC, test)
+    error <- predict - test[["yield_anomaly"]]
+    err[i] <- mean(error^2)
+  }
+  plot(S,err,type="b",log="x",xlab="Sigma",ylab="CV error")
+  
+  
+  svmfit <- ksvm(models[[m]], data = train ,kernel="laplacedot", C=10, epsilon=0.1, kpar=list(sigma=S[which.min(err)]))
+  predict <- predict(svmfit, test)
+  error <- predict - test[["yield_anomaly"]]
+  MSElaplace[m] <- mean(error^2)
+}
+MSElaplace
+
+#Finally build model and get a boxplot
+NREP = 10
+finalErrs = rep(0,10)
+for (m in (1:NREP)) {
+  index <- sample(nrow(data), 0.8*nrow(data))
+  train <- data[index,]
+  test <- data[-index,]
+  svmfit <- ksvm(models[[1]], data = train , type="eps-svr", kernel="laplacedot", C=10, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.08), cross=5)
+  predict <- predict(svmfit, test)
+  error <- predict - test[["yield_anomaly"]]
+  finalErrs[m] <- mean(error^2)
+}
+
+boxplot(finalErrs)
+
+
+svmfit <- ksvm(models[[1]], data = train , type="eps-svr", kernel="laplacedot", C=10, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.08), cross=0)
+svmfit
+predict <- predict(svmfit, test)
+error <- predict - test[["yield_anomaly"]]
+MSE <- mean(error^2)
+print(MSE)
+#MSE of 0.54589 Env
+
+
 ## Keras neural network
 library(keras)
-install_keras()
-
-set.seed(222)
 
 model = keras_model_sequential() %>% 
   layer_dense(units=64, activation="relu", input_shape=57) %>% 
@@ -287,6 +332,13 @@ scores = model %>% evaluate(as.matrix(x.train), as.matrix(y.train), verbose = 0)
 print(scores)
 #0.5391511 MSE on training datas
 
+
+testdata <- read.csv(file="testMais.csv", header = TRUE, sep=",")
+testdata <- read.table(file="mais_test.txt", sep = "" , header = T , na.strings ="", stringsAsFactors= F)
+nrow(testdata)
+
+
+
 y_pred = model %>% predict(as.matrix(x.test))
 error <- y_pred - y.test
 MSE <- mean(error^2)
@@ -306,12 +358,10 @@ Without real explained analysis for the moment though --
 We can clearly point out 2 models that best fits our regression problem here.
 We managed some feature extraction/PCA's, Subset / Regularization but loss didn't dropped under 0.7
 
-SVR : Model we built result in an MSE of 0.63XX approx with modele 1 (complete) - rbfdot Cost = 1 ; sigma = 0.0291
-
-MLPerceptron with keras : Model we build result in an MSE of approx 0.58XX and loss was 0.59XX
-
+SVR : Model we built result in an MSE of 0.55XX approx with modele 1 (complete) - laplaciankernel 
+Cost = 10 ; sigma = 0.08
 """
 
-
+#Preds
 
 

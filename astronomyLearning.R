@@ -104,7 +104,7 @@ table(test.data$class,yhat2)
 #error of 1% very good
 
 ### D SVM
-fit.svm <- ksvm(class ~., kernel="polydot", C=1, data=train.data)
+fit.svm <- ksvm(class ~., kernel="vanilladot", C=1, data=train.data)
 pred.svm <- predict(fit.svm, newdata=test.data[,-11], type="response")
 mean(test.data$class!=pred.svm)
 #6.3% err for rdf
@@ -289,10 +289,7 @@ svm.cv
 # 0.6% error and C = 1000 might be a bit large for furhter datas
 #n a SVM we are searching for two things: a hyperplane with the largest minimum margin, 
 #and a hyperplane that correctly separates as many instances as possible
-trainAndTest <- createDataPartition(data, nbdata)
-train.data <- trainAndTest$train
-test.data <- trainAndTest$test
-indic <- trainAndTest$smp_ind
+
 
 ### Regularization
 
