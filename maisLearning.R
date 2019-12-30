@@ -239,13 +239,6 @@ print(MSE)
 #0.632 modele 1 - rbfdot Cost = 1 ; sigma = 0.0291
 
 
-##KPCA
-kpc <- kpca(as.matrix(train.data[,-2]), kernel="rbfdot", kpar=list(sigma=0.3))
-kpc
-eig(kpc)
-
-
-
 ## Keras neural network
 library(keras)
 install_keras()
