@@ -29,6 +29,15 @@ library(Metrics)
 
 #--------------------------------------------------------------------------------------
 
+biasSquared = function(estimate, truth) {
+  
+  mean((mean(estimate) - truth))**2
+} 
+
+variance = function(estimate, truth) {
+  var = mean((estimate - mean(estimate))**2)
+  return(var)
+} 
 
 # ETL Data exploration
 
@@ -39,7 +48,6 @@ dim(data)
 set.seed(111)
 boxplot(data$yield_anomaly)  
 data
-set.seed(111)
 index <- sample(nrow(data), 0.8*nrow(data))
 train <- data[index,]
 test <- data[-index,]
@@ -166,7 +174,8 @@ pcr_pred <- predict(pcr_model, test, ncomp = 57)
 mean((pcr_pred - test[["yield_anomaly"]])^2)
 # 0.70255
 #il faut 57 composantes principales.
-
+variance(pcr_pred, test$yield_anomaly) #0.33 var
+biasSquared(pcr_pred, test$yield_anomaly) # bias 0.00001
 
 #Models
 ##Linear Regression
@@ -230,12 +239,14 @@ for (m in (1:length(models))) {
   print(MSE)
 }
 
-svmfit <- ksvm(models[[1]], data = train , type="eps-svr", kernel="rbfdot", C=1, scaled= TRUE, epsilon=0.05, kpar=list(sigma=0.0291), cross=5)
-svmfit
-predict <- predict(svmfit, test)
-error <- predict - test[["yield_anomaly"]]
+svmfitRBF <- ksvm(yield_anomaly~., data = train , type="eps-svr", kernel="rbfdot", C=1, scaled= TRUE, epsilon=0.05, kpar=list(sigma=0.0291), cross=5)
+predictRBF <- predict(svmfitRBF, test)
+error <- predictRBF - test$yield_anomaly
 MSE <- mean(error^2)
 print(MSE)
+variance(predictRBF, test$yield_anomaly) #0.424 var
+biasSquared(predictRBF, test$yield_anomaly) # bias 2.6*10-5
+
 #0.632 modele 1 - rbfdot Cost = 1 ; sigma = 0.0291
 
 
@@ -284,6 +295,8 @@ predict <- predict(svmfit, test)
 error <- predict - test[["yield_anomaly"]]
 MSE <- mean(error^2)
 print(MSE)
+variance(predict, test$yield_anomaly) #0.48 var
+biasSquared(predict, test$yield_anomaly) # bias 1.34*10-5
 #MSE of 0.54589 Env
 
 
@@ -320,7 +333,7 @@ early_stop <- callback_early_stopping(monitor = "val_loss", patience = 50)
 history <- model %>% fit(
   as.matrix(x.train),
   as.matrix(y.train),
-  epochs = 500,
+  epochs = 300,
   validation_split = 0.2,
   verbose = 0,
   callbacks = list(early_stop)
@@ -363,5 +376,34 @@ Cost = 10 ; sigma = 0.08
 """
 
 #Preds
+#------------- SAMPLE RENEW ------------------------------------------------#
+biasSquared = function(estimate, truth) {
+  
+  mean((mean(estimate) - truth))**2
+} 
 
+variance = function(estimate, truth) {
+  var = mean((estimate - mean(estimate))**2)
+  return(var)
+} 
+
+#Loading datas
+data <- read.csv(file="mais_train.csv", header = TRUE, sep = ",", row.names = 1)
+index <- sample(nrow(data), 0.8*nrow(data))
+train <- data[index,]
+test <- data[-index,]
+
+###TEST
+dataT <- read.table("mais.txt", sep = "" , header = T)
+dataT <- dataT[!(rownames(dataT) %in% rownames(data)),]
+#-------------CHOICES MODELS ------------------------------------------------#
+#SVM
+svmfitfinal <- ksvm(yield_anomaly~., data = data , type="eps-svr", kernel="laplacedot", C=10, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.08), cross=0)
+predictsvmfinal <- predict(svmfitRBF, dataT[,-2])
+errorSVMfinal <- predictsvmfinal - dataT$yield_anomaly
+MSESVMfinal <- mean(errorSVMfinal^2)
+print(MSESVMfinal) #0.435
+variance(predictsvmfinal, test$yield_anomaly) #0.456 var
+biasSquared(predictsvmfinal, test$yield_anomaly) # bias 8*10-5
+#-------------CHOICES MODELS ------------------------------------------------#
 
