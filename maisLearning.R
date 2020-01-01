@@ -258,20 +258,32 @@ for (m in (1:length(models))) {
   N<-length(S)
   err<-rep(0,N)
   for(i in 1:N) {
-    svmfitC <- ksvm(models[[m]], data = train, kernel = "laplacedot", C=10, cross=5, kpar=list(sigma=S[i]))
+    svmfitC <- ksvm(yield_anomaly~., data = train, kernel = "laplacedot", C=6, cross=5, kpar=list(sigma=S[i]))
     predict <- predict(svmfitC, test)
     error <- predict - test[["yield_anomaly"]]
     err[i] <- mean(error^2)
   }
+  
   plot(S,err,type="b",log="x",xlab="Sigma",ylab="CV error")
   
   
-  svmfit <- ksvm(models[[m]], data = train ,kernel="laplacedot", C=10, epsilon=0.1, kpar=list(sigma=S[which.min(err)]))
+  svmfit <- ksvm(models[[m]], data = train ,kernel="laplacedot", C=6, epsilon=0.1, kpar=list(sigma=S[which.min(err)]))
   predict <- predict(svmfit, test)
   error <- predict - test[["yield_anomaly"]]
   MSElaplace[m] <- mean(error^2)
 }
 MSElaplace
+
+CC<-c(0.1, 1, 5, 10, 100)
+N<-length(CC)
+err<-rep(0,N)
+for(i in 1:N) {
+  svmfitC <- ksvm(yield_anomaly~., data = train, type="eps-svr", kernel = "laplacedot", C=CC[i], cross=5,  epsilon=0.1, kpar=list(sigma=0.085), scaled=TRUE)
+  predict <- predict(svmfitC, test)
+  error <- predict - test[["yield_anomaly"]]
+  err[i] <- mean(error^2)
+}
+plot(CC,err,type="b",log="x",xlab="Cost",ylab="CV error")
 
 #Finally build model and get a boxplot
 NREP = 10
@@ -280,14 +292,13 @@ for (m in (1:NREP)) {
   index <- sample(nrow(data), 0.8*nrow(data))
   train <- data[index,]
   test <- data[-index,]
-  svmfit <- ksvm(models[[1]], data = train , type="eps-svr", kernel="laplacedot", C=6, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.085), cross=5)
+  svmfit <- ksvm(yield_anomaly~., data = train , type="eps-svr", kernel="laplacedot", C=6, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.085), cross=5)
   predict <- predict(svmfit, test)
   error <- predict - test[["yield_anomaly"]]
   finalErrs[m] <- mean(error^2)
 }
 
 boxplot(finalErrs)
-
 
 svmfit <- ksvm(yield_anomaly~., data = train , type="eps-svr", kernel="laplacedot", C=6, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.085), cross=0)
 svmfit
