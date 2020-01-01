@@ -409,11 +409,11 @@ dataT <- read.table("mais.txt", sep = "" , header = T)
 dataT <- dataT[!(rownames(dataT) %in% rownames(data)),]
 #-------------CHOICES MODELS ------------------------------------------------#
 #SVM
-svmfitfinal <- ksvm(yield_anomaly~., data = train , type="eps-svr", kernel="laplacedot", C=6, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.085), cross=0)
-predictsvmfinal <- predict(svmfitfinal, dataT[,-2])
+svm.reg <- ksvm(yield_anomaly~., data = train , type="eps-svr", kernel="laplacedot", C=6, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.085), cross=0)
+predictsvmfinal <- predict(svm.reg, dataT[,-2])
 errorSVMfinal <- predictsvmfinal - dataT$yield_anomaly
 MSESVMfinal <- mean(errorSVMfinal^2)
-print(MSESVMfinal) #0.435
+print(MSESVMfinal) #0.578
 variance(predictsvmfinal, test$yield_anomaly) #0.45 var
 biasSquared(predictsvmfinal, test$yield_anomaly) # bias 4*10-4
 #-------------CHOICES MODELS ------------------------------------------------#

@@ -25,7 +25,7 @@ data[indSc] <- lapply(data[indSc], scale)
 nbdata <- nrow(data)
 
 createDataPartition <- function(data, nb) {
-  smp_size <- floor(0.70 * nb)
+  smp_size <- floor(0.80 * nb)
   train_ind <- sample(seq_len(nb), size = smp_size)
   train <- data[train_ind,]
   test <- data[-train_ind,]
@@ -446,7 +446,10 @@ err # mtry = 44
 #------------- SAMPLE RENEW ------------------------------------------------#
 #loading data
 data <- read.csv(file="astronomy_train.csv", header = TRUE, sep = ",")
+dataT <- read.csv(file="astro.csv", header = TRUE, sep = ",")
+dataT <- dataT[!(dataT$ra %in% data$ra),]
 
+nbdata <- nrow(data)
 #separating data
 trainAndTest <- createDataPartition(data, nbdata)
 train.data <- trainAndTest$train
@@ -457,37 +460,48 @@ indic <- trainAndTest$smp_ind
 indSc <- sapply(train.data, is.numeric)
 train.data[indSc] <- lapply(train.data[indSc], scale)
 nbdata <- nrow(train.data)
-uselessName <- c("rerun", "run", "camcol", "field", "objid", "specobjid")
+uselessName <- c("rerun", "run", "camcol", "objid", "field", "specobjid")
 train.data <- train.data[,!names(train.data) %in% uselessName]
 
 
 
 # algo to be used on classifier function : scaling, removing useless
-uselessName <- c("rerun", "run", "camcol", "field", "objid", "specobjid")
+uselessName <- c("rerun", "run", "camcol", "objid", "field", "specobjid")
 indSc <- sapply(test.data, is.numeric)
 test.data[indSc] <- lapply(test.data[indSc], scale)
 test.data <- test.data[,!names(test.data) %in% uselessName]
 
 
+#REAL TEST
+indSc <- sapply(data, is.numeric)
+data[indSc] <- lapply(data[indSc], scale)
+nbdata <- nrow(data)
+uselessName <- c("rerun", "run", "camcol", "objid", "field", "specobjid")
+data <- data[,!names(data) %in% uselessName]
+
+
+indSc <- sapply(dataT, is.numeric)
+dataT[indSc] <- lapply(dataT[indSc], scale)
+dataT <- dataT[,!names(dataT) %in% uselessName]
 #-------------CHOICES MODELS ------------------------------------------------#
 
-randomForest.mFinal <- randomForest(best_models[[2]], data = train.data, mtry=4)
-predsRF <- predict(randomForest.mFinal, newdata = test.data[,-8], type = "response")
-confusionRF <- table(test.data$class, predsRF)
-errRF <- 1 - sum(diag(confusionRF))/nrow(test.data)
+randomForest.mFinal <- randomForest(best_models[[2]], data = data, mtry=4)
+predsRF <- predict(randomForest.mFinal, newdata = dataT[,-8], type = "response")
+confusionRF <- table(dataT$class, predsRF)
+errRF <- 1 - sum(diag(confusionRF))/nrow(dataT)
 errRF
 #0.9%
 plot(randomForest.mFinal)
 randomForest.mFinal
 
 #                             ||||||||||||||||||||||||||
-
-svm.mFinale <- ksvm(class~., kernel="vanilladot", C=1000, data = train.data, cross=0)
-predsSVM <- predict(svm.mFinale, newdata = test.data[,-8], type="response")
-confusionSVM <- table(test.data$class, predsSVM)
+dataT
+svm.class <- ksvm(class~., kernel="vanilladot", C=1000, data = data, cross=0)
+predsSVM <- predict(svm.class, newdata = dataT[,-8], type="response")
+confusionSVM <- table(dataT$class, predsSVM)
 confusionSVM
-errSVM <- 1-sum(diag(confusionSVM))/nrow(test.data)
+errSVM <- 1-sum(diag(confusionSVM))/nrow(dataT)
 errSVM
-svm.mFinale
+svm.class
 # 0.6%
-#-------------CHOICES MODELS ------------------------------------------------#
+#-------------SAVING MODELS ------------------------------------------------#
