@@ -29,6 +29,15 @@ library(Metrics)
 
 #--------------------------------------------------------------------------------------
 
+biasSquared = function(estimate, truth) {
+  
+  mean((mean(estimate) - truth))**2
+} 
+
+variance = function(estimate, truth) {
+  var = mean((estimate - mean(estimate))**2)
+  return(var)
+} 
 
 # ETL Data exploration
 
@@ -39,7 +48,6 @@ dim(data)
 set.seed(111)
 boxplot(data$yield_anomaly)  
 data
-set.seed(111)
 index <- sample(nrow(data), 0.8*nrow(data))
 train <- data[index,]
 test <- data[-index,]
@@ -166,7 +174,8 @@ pcr_pred <- predict(pcr_model, test, ncomp = 57)
 mean((pcr_pred - test[["yield_anomaly"]])^2)
 # 0.70255
 #il faut 57 composantes principales.
-
+variance(pcr_pred, test$yield_anomaly) #0.33 var
+biasSquared(pcr_pred, test$yield_anomaly) # bias 0.00001
 
 #Models
 ##Linear Regression
@@ -230,12 +239,14 @@ for (m in (1:length(models))) {
   print(MSE)
 }
 
-svmfit <- ksvm(models[[1]], data = train , type="eps-svr", kernel="rbfdot", C=1, scaled= TRUE, epsilon=0.05, kpar=list(sigma=0.0291), cross=5)
-svmfit
-predict <- predict(svmfit, test)
-error <- predict - test[["yield_anomaly"]]
+svmfitRBF <- ksvm(yield_anomaly~., data = train , type="eps-svr", kernel="rbfdot", C=1, scaled= TRUE, epsilon=0.05, kpar=list(sigma=0.0291), cross=5)
+predictRBF <- predict(svmfitRBF, test)
+error <- predictRBF - test$yield_anomaly
 MSE <- mean(error^2)
 print(MSE)
+variance(predictRBF, test$yield_anomaly) #0.424 var
+biasSquared(predictRBF, test$yield_anomaly) # bias 2.6*10-5
+
 #0.632 modele 1 - rbfdot Cost = 1 ; sigma = 0.0291
 
 
@@ -243,24 +254,36 @@ print(MSE)
 # err of 0.56XX   CC find then sigma
 MSElaplace <- rep(0,length(models))
 for (m in (1:length(models))) {
-  S<-c(0.05,0.06, 0.07, 0.08, 0.09)
+  S<-c(0.05,0.06, 0.07, 0.08, 0.085)
   N<-length(S)
   err<-rep(0,N)
   for(i in 1:N) {
-    svmfitC <- ksvm(models[[m]], data = train, kernel = "laplacedot", C=10, cross=5, kpar=list(sigma=S[i]))
+    svmfitC <- ksvm(yield_anomaly~., data = train, kernel = "laplacedot", C=6, cross=5, kpar=list(sigma=S[i]))
     predict <- predict(svmfitC, test)
     error <- predict - test[["yield_anomaly"]]
     err[i] <- mean(error^2)
   }
+  
   plot(S,err,type="b",log="x",xlab="Sigma",ylab="CV error")
   
   
-  svmfit <- ksvm(models[[m]], data = train ,kernel="laplacedot", C=10, epsilon=0.1, kpar=list(sigma=S[which.min(err)]))
+  svmfit <- ksvm(models[[m]], data = train ,kernel="laplacedot", C=6, epsilon=0.1, kpar=list(sigma=S[which.min(err)]))
   predict <- predict(svmfit, test)
   error <- predict - test[["yield_anomaly"]]
   MSElaplace[m] <- mean(error^2)
 }
 MSElaplace
+
+CC<-c(0.1, 1, 5, 10, 100)
+N<-length(CC)
+err<-rep(0,N)
+for(i in 1:N) {
+  svmfitC <- ksvm(yield_anomaly~., data = train, type="eps-svr", kernel = "laplacedot", C=CC[i], cross=5,  epsilon=0.1, kpar=list(sigma=0.085), scaled=TRUE)
+  predict <- predict(svmfitC, test)
+  error <- predict - test[["yield_anomaly"]]
+  err[i] <- mean(error^2)
+}
+plot(CC,err,type="b",log="x",xlab="Cost",ylab="CV error")
 
 #Finally build model and get a boxplot
 NREP = 10
@@ -269,7 +292,7 @@ for (m in (1:NREP)) {
   index <- sample(nrow(data), 0.8*nrow(data))
   train <- data[index,]
   test <- data[-index,]
-  svmfit <- ksvm(models[[1]], data = train , type="eps-svr", kernel="laplacedot", C=10, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.08), cross=5)
+  svmfit <- ksvm(yield_anomaly~., data = train , type="eps-svr", kernel="laplacedot", C=6, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.085), cross=5)
   predict <- predict(svmfit, test)
   error <- predict - test[["yield_anomaly"]]
   finalErrs[m] <- mean(error^2)
@@ -277,13 +300,14 @@ for (m in (1:NREP)) {
 
 boxplot(finalErrs)
 
-
-svmfit <- ksvm(models[[1]], data = train , type="eps-svr", kernel="laplacedot", C=10, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.08), cross=0)
+svmfit <- ksvm(yield_anomaly~., data = train , type="eps-svr", kernel="laplacedot", C=6, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.085), cross=0)
 svmfit
 predict <- predict(svmfit, test)
 error <- predict - test[["yield_anomaly"]]
 MSE <- mean(error^2)
 print(MSE)
+variance(predict, test$yield_anomaly) #0.48 var
+biasSquared(predict, test$yield_anomaly) # bias 1.34*10-5
 #MSE of 0.54589 Env
 
 
@@ -320,7 +344,7 @@ early_stop <- callback_early_stopping(monitor = "val_loss", patience = 50)
 history <- model %>% fit(
   as.matrix(x.train),
   as.matrix(y.train),
-  epochs = 500,
+  epochs = 300,
   validation_split = 0.2,
   verbose = 0,
   callbacks = list(early_stop)
@@ -358,10 +382,38 @@ Without real explained analysis for the moment though --
 We can clearly point out 2 models that best fits our regression problem here.
 We managed some feature extraction/PCA's, Subset / Regularization but loss didn't dropped under 0.7
 
-SVR : Model we built result in an MSE of 0.55XX approx with modele 1 (complete) - laplaciankernel 
-Cost = 10 ; sigma = 0.08
+SVR : Model we built result in an MSE of 0.57XX approx with modele 1 (complete) - laplaciankernel 
+Cost = 6 ; sigma = 0.085
 """
 
 #Preds
+#------------- SAMPLE RENEW ------------------------------------------------#
+biasSquared = function(estimate, truth) {
+  
+  mean((mean(estimate) - truth))**2
+} 
 
+variance = function(estimate, truth) {
+  var = mean((estimate - mean(estimate))**2)
+  return(var)
+} 
 
+#Loading datas
+data <- read.csv(file="mais_train.csv", header = TRUE, sep = ",", row.names = 1)
+index <- sample(nrow(data), 0.8*nrow(data))
+train <- data[index,]
+test <- data[-index,]
+
+###TEST
+dataT <- read.table("mais.txt", sep = "" , header = T)
+dataT <- dataT[!(rownames(dataT) %in% rownames(data)),]
+#-------------CHOICES MODELS ------------------------------------------------#
+#SVM
+svm.reg <- ksvm(yield_anomaly~., data = train , type="eps-svr", kernel="laplacedot", C=6, scaled= TRUE, epsilon=0.1, kpar=list(sigma=0.085), cross=0)
+predictsvmfinal <- predict(svm.reg, dataT[,-2])
+errorSVMfinal <- predictsvmfinal - dataT$yield_anomaly
+MSESVMfinal <- mean(errorSVMfinal^2)
+print(MSESVMfinal) #0.578
+variance(predictsvmfinal, test$yield_anomaly) #0.45 var
+biasSquared(predictsvmfinal, test$yield_anomaly) # bias 4*10-4
+#-------------CHOICES MODELS ------------------------------------------------#

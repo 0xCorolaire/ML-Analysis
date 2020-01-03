@@ -14,6 +14,7 @@ library(upclass)
 library(klaR)
 library(mda)
 library(fda)
+library(pROC)
 #---------------------------------------------
 data <- read.csv(file="astronomy_train.csv", header = TRUE, sep = ",")
 
@@ -24,7 +25,7 @@ data[indSc] <- lapply(data[indSc], scale)
 nbdata <- nrow(data)
 
 createDataPartition <- function(data, nb) {
-  smp_size <- floor(0.70 * nb)
+  smp_size <- floor(0.80 * nb)
   train_ind <- sample(seq_len(nb), size = smp_size)
   train <- data[train_ind,]
   test <- data[-train_ind,]
@@ -32,6 +33,7 @@ createDataPartition <- function(data, nb) {
   returnList <- list("train" = train, "test" = test, "smp_ind" = train_ind)
   return(returnList)
 }
+
 
 
 accuracy = function(confusion_matrix){
@@ -46,15 +48,14 @@ levels(data$class)
 percentage <- prop.table(table(data$class)) * 100
 cbind(freq=table(data$class), percentage=percentage)
 # => lot of galaxy (avg 50% and few QSO 9%)
-
-uselessName <- c("rerun", "objid", "specobjid")
+uselessName <- c("rerun", "run", "camcol", "field", "objid", "specobjid")
 #dropping useless column
 data <- data[,!names(data) %in% uselessName]
 
 data$class <- as.factor(data$class)
-
-outputData <- data[,11]
-predictorData <- data[,-11]
+data
+outputData <- data[,8]
+predictorData <- data[,-8]
 
 par(mfrow=c(2,8))
 for(i in 1:16) {
@@ -63,6 +64,18 @@ for(i in 1:16) {
 par(mfrow=c(1,1))
 plot(outputData)
 featurePlot(x=predictorData, y=outputData, plot="box")
+
+
+#feature exploration
+#redshift
+boxplot(data[data['class']=='STAR',]$redshift, main="Star redshift xplain",
+        ylab="redshift")
+
+boxplot(data[data['class']=='GALAXY',]$redshift, main="GALAXY redshift xplain",
+        ylab="redshift")
+
+boxplot(data[data['class']=='QSO',]$redshift, main="QSO redshift xplain",
+        ylab="redshift")
 
 #first pass through different algorithm
 #KNN, LDA, QDA, LOGIC REG, RANDOM FOREST, BAGGING SVM
@@ -75,16 +88,16 @@ train.data <- trainAndTest$train
 test.data <- trainAndTest$test
 indic <- trainAndTest$smp_ind
 fit.lda <- lda(class ~ ., train.data)
-pred.lda <- predict(fit.lda, newdata=test.data[,-11])
-
-conf.lda <- table(test.data$class, pred.lda$class)
+pred.lda <- predict(fit.lda, newdata=test.data[,-8])
+test.data
+conf.lda <- table(actual = test.data$class, predicted = pred.lda$class)
 
 err.lda <- 100-accuracy(conf.lda)
 err.lda #8.8%
 
 ###B Naivesb
 fit.naive <- naive_bayes(class~.,data=train.data)
-pred.naive <- predict(fit.naive,newdata=test.data[,-11])
+pred.naive <- predict(fit.naive,newdata=test.data[,-8])
 
 conf.naive <- table(test.data$class, pred.naive)
 
@@ -105,14 +118,15 @@ table(test.data$class,yhat2)
 
 ### D SVM
 fit.svm <- ksvm(class ~., kernel="vanilladot", C=1, data=train.data)
-pred.svm <- predict(fit.svm, newdata=test.data[,-11], type="response")
+pred.svm <- predict(fit.svm, newdata=test.data[,-8], type="response")
+
 mean(test.data$class!=pred.svm)
 #6.3% err for rdf
 #1.9% for vanilladot
 
-### E GMM
-Xgmm <- as.matrix(data[,-11])
-cl <- as.matrix(data[,11])
+### E 8
+Xgmm <- as.matrix(data[,-8])
+cl <- as.matrix(data[,8])
 Cltrain = cl[indic,]
 Xtrain = Xgmm[indic,]
 
@@ -155,7 +169,6 @@ transformation <- function(X, degree=2, orthogonal.poly=TRUE){
   return(X.transform)
 }
 
-
 ##Regsubset
 regsubset <- regsubsets(class ~ ., data=data, method = "exhaustive", nvmax = 14)
 plot(regsubset, scale = "r2")
@@ -179,7 +192,6 @@ get_model_formula <- function(id, object, outcome){
   # Build model formula
   as.formula(paste0(outcome, "~", predictors))
 }
-
 #get_model_formula(11, regsubset, "class")
 best_models <- c(class~., get_model_formula(10, regsubset, "class"), get_model_formula(11, regsubset, "class"))
 
@@ -253,8 +265,8 @@ boxplot(err_mat)
 # REDO with vanilladot => vanilladot is better
 
 # best with formula 10 and polydot, kpar=list(degree=3,scale=2, offset=2) => 1.4% error
-svm.cv <- ksvm(best_models[[2]], kernel="polydot" ,kpar=list(degree=3,scale=2, offset = 2), C=0.1, data = train.data)
-pred.cv <- predict(svm.cv, newdata = test.data[,-11], type="response")
+svm.cv <- ksvm(best_models[[2]], kernel="polydot" ,kpar=list(degree=3,scale=2, offset = 2), C=1000, data = train.data)
+pred.cv <- predict(svm.cv, newdata = test.data[,-8], type="response")
 confusion.cv <- table(test.data$class, pred.cv)
 errSVM <- 1-sum(diag(confusion.cv))/nrow(test.data)
 errSVM
@@ -279,8 +291,8 @@ plot(err_c)
 # 2nd one on 700-1500 range=>
 
 #findind 2000 best
-svm.cv <- ksvm(class~., kernel="vanilladot", C=2000, data = train.data, cross=0)
-pred.cv <- predict(svm.cv, newdata = test.data[,-11], type="response")
+svm.cv <- ksvm(class~., kernel="vanilladot", C=1000, data = train.data, cross=0)
+pred.cv <- predict(svm.cv, newdata = test.data[,-8], type="response")
 confusion.cv <- table(test.data$class, pred.cv)
 confusion.cv
 errSVM <- 1-sum(diag(confusion.cv))/nrow(test.data)
@@ -311,50 +323,83 @@ for (f in (1:3)) {
 }
 # very bad without best models in (10% error)
 
-### ACP - PCA
-pca<-princomp(data[,-11])
+### ACP - PCA for ugriz as corr plot showed few similaritude
+data
+pca<-princomp(train.data[,3:7])
 Z <- pca$scores
 lambda<-pca$sdev^2
-pairs(Z[,1:14],col=data[,11])
+pairs(Z[,1:5],col=train.data[,8])
 plot(cumsum(lambda)/sum(lambda),type="l",xlab="q",ylab="proportion of explained variance")
-q <- 9
+q <- 3
 X2<-scale(Z[,1:q])
 # svm a noyau finding of C best with CV
 # SVM avec noyau linéaire
 # Réglage de C par validation croisée
-yPCA<-as.factor(data[,11])
+
+yPCA<-as.factor(train.data[,8])
 yPCA
+
+
+#update data to replace u g r i z to PCA's
+dataPCA = cbind(train.data, X2)
+dataPCA
+pcaRMV <- c("u", "g", "r", "i", "z")
+#dropping useless column
+dataPCA <- dataPCA[,!names(dataPCA) %in% pcaRMV]
+head(dataPCA)
+#we now have 10 features
 # Split train/test
-n<-nrow(X2)
+n<-nrow(dataPCA)
 train<-sample(1:n,round(2*n/3))
-X.train<-X2[train,]
+X.train<-dataPCA[train,-3]
 y.train<-yPCA[train]
-X.test<-X2[-train,]
+X.test<-dataPCA[-train, -3]
 y.test<-yPCA[-train]
 
-CC<-c(0.001,0.01,0.1,1,10,100,1000,10e4)
+CC<-c(10,100, 1000, 5000, 10000)
 N<-length(CC)
 M<-10 # nombre de répétitions de la validation croisée
 err<-matrix(0,N,M)
 for(k in 1:M){
   for(i in 1:N){
-    modS <- ksvm(x=X.train,y=y.train,type="C-svc",kernel="vanilladot",C=CC[i],cross=5)
-    pred.cv <- predict(modS, newdata = X.test, type="response")
-    confusion.cv <- table(y.test, pred.cv)
-    err[i,k] <- 1-sum(diag(confusion.cv))/nrow(X.test)
+    
+    modS <- ksvm(class~., data=dataPCA, type="C-svc", kernel="vanilladot", C=CC[i], cross=5)
+    
+    pcaRMV <- c("u", "g", "r", "i", "z")
+    #dropping useless column
+    testPCA <- test.data[,names(test.data) %in% pcaRMV]
+    
+    pcas <- predict(pca, newdata = testPCA)
+    test.PCA = cbind(test.data, pcas[,1:3])
+    test.PCA <- test.PCA[,!names(test.PCA) %in% pcaRMV]
+    
+    pred.cv <- predict(modS, newdata = test.PCA[,-3], type="response")
+    
+    confusion.cv <- table(test.PCA[,3], pred.cv)
+    
+    err[i,k] <- 1-sum(diag(confusion.cv))/nrow(test.PCA)
+    
   }
 }
+
+
 Err<-rowMeans(err)
 plot(CC,Err,type="b",log="x",xlab="C",ylab="CV error")
 
-svmfitPCA <- ksvm(x=X.train,y=y.train,type="C-svc",kernel="vanilladot",C=1000)
-predPCA <- predict(svmfitPCA,newdata=X.test)
-table(y.test,predPCA)
-errPCA<-mean(y.test != predPCA)
+#algo pred
+svmfitPCA <- ksvm(class~., data=dataPCA ,type="C-svc",kernel="vanilladot",C=1000)
+pcaRMV <- c("u", "g", "r", "i", "z")
+#dropping useless column
+PCAargMerge <- test.data[,names(test.data) %in% pcaRMV]
+pcas <- predict(pca, newdata = PCAargMerge)
+test.PCA = cbind(test.data, pcas[,1:3])
+test.PCA <- test.PCA[,!names(test.PCA) %in% pcaRMV]
+predPCA <- predict(svmfitPCA,newdata=test.PCA[,-3])
+table(test.PCA[,3],predPCA)
+errPCA<-mean(test.PCA[,3] != predPCA)
 print(errPCA)
 #1.6% error
 
-## FDA A FAIRE
 
 ## CCL for astronomy => randomForest with mtry = sqrt(p) = 4 best with 1% err
 err = rep(0,20)
@@ -397,33 +442,66 @@ for (l in (1:14)){
 boxplot(err)
 err # mtry = 44
 
-
+# CONCLUSION
 #------------- SAMPLE RENEW ------------------------------------------------#
+#loading data
+data <- read.csv(file="astronomy_train.csv", header = TRUE, sep = ",")
+dataT <- read.csv(file="astro.csv", header = TRUE, sep = ",")
+dataT <- dataT[!(dataT$ra %in% data$ra),]
 
+nbdata <- nrow(data)
+#separating data
 trainAndTest <- createDataPartition(data, nbdata)
 train.data <- trainAndTest$train
 test.data <- trainAndTest$test
 indic <- trainAndTest$smp_ind
 
+#modify train data to fit model
+indSc <- sapply(train.data, is.numeric)
+train.data[indSc] <- lapply(train.data[indSc], scale)
+nbdata <- nrow(train.data)
+uselessName <- c("rerun", "run", "camcol", "objid", "field", "specobjid")
+train.data <- train.data[,!names(train.data) %in% uselessName]
+
+
+
+# algo to be used on classifier function : scaling, removing useless
+uselessName <- c("rerun", "run", "camcol", "objid", "field", "specobjid")
+indSc <- sapply(test.data, is.numeric)
+test.data[indSc] <- lapply(test.data[indSc], scale)
+test.data <- test.data[,!names(test.data) %in% uselessName]
+
+
+#REAL TEST
+indSc <- sapply(data, is.numeric)
+data[indSc] <- lapply(data[indSc], scale)
+nbdata <- nrow(data)
+uselessName <- c("rerun", "run", "camcol", "objid", "field", "specobjid")
+data <- data[,!names(data) %in% uselessName]
+
+
+indSc <- sapply(dataT, is.numeric)
+dataT[indSc] <- lapply(dataT[indSc], scale)
+dataT <- dataT[,!names(dataT) %in% uselessName]
 #-------------CHOICES MODELS ------------------------------------------------#
 
-randomForest.mFinal <- randomForest(best_models[[2]], data = train.data, mtry=4)
-predsRF <- predict(randomForest.mFinal, newdata = test.data[,-11], type = "response")
-confusionRF <- table(test.data$class, predsRF)
-errRF <- 1 - sum(diag(confusionRF))/nrow(test.data)
+randomForest.mFinal <- randomForest(best_models[[2]], data = data, mtry=4)
+predsRF <- predict(randomForest.mFinal, newdata = dataT[,-8], type = "response")
+confusionRF <- table(dataT$class, predsRF)
+errRF <- 1 - sum(diag(confusionRF))/nrow(dataT)
 errRF
 #0.9%
 plot(randomForest.mFinal)
 randomForest.mFinal
 
 #                             ||||||||||||||||||||||||||
-
-svm.mFinale <- ksvm(class~., kernel="vanilladot", C=2000, data = train.data, cross=0)
-predsSVM <- predict(svm.mFinale, newdata = test.data[,-11], type="response")
-confusionSVM <- table(test.data$class, predsSVM)
+dataT
+svm.class <- ksvm(class~., kernel="vanilladot", C=1000, data = data, cross=0)
+predsSVM <- predict(svm.class, newdata = dataT[,-8], type="response")
+confusionSVM <- table(dataT$class, predsSVM)
 confusionSVM
-errSVM <- 1-sum(diag(confusionSVM))/nrow(test.data)
+errSVM <- 1-sum(diag(confusionSVM))/nrow(dataT)
 errSVM
-svm.mFinale
+svm.class
 # 0.6%
-#-------------CHOICES MODELS ------------------------------------------------#
+#-------------SAVING MODELS ------------------------------------------------#
