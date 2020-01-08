@@ -39,7 +39,8 @@ classifieur_astronomy <- function(dataset) {
 data <- read.csv(file="astronomy_train.csv", header = TRUE, sep = ",")
 dataT <- read.csv(file="astro.csv", header = TRUE, sep = ",")
 dataT <- dataT[!(dataT$ra %in% data$ra),]
-confusionSVM <- table(dataT$class, classifieur_astronomy(dataT))
+
+confusionSVM <- table(dataT$class, classifieur_astronomy(dataT[,-14]))
 confusionSVM
 errSVM <- 1-sum(diag(confusionSVM))/nrow(dataT)
 errSVM
