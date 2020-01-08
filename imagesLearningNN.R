@@ -197,3 +197,16 @@ img_test2 = array(0, dim = c(2, 100, 100, 3))
 img_test = image_load(file.path(getwd(), 'images_test_exterieur', 'cat', 'cat10.jpg'), target_size = c(100, 100), interpolation = 'bilinear')
 img_test2[1,,,] = image_to_array(img_test)
 y = predict_classes(model, img_test2[,,,])
+
+
+
+image_path <- file.path(file.path(getwd(), 'images_test_exterieur', 'car', 'car5.jpg'))
+test_image <- image_load(image_path, target_size = c(100,100))
+image_tensor <- image_to_array(test_image)
+image_tensor <- array_reshape(image_tensor, c(1, c(100,100), 3))
+image_tensor <- image_tensor / 255
+plot(as.raster(image_tensor[1,,,]))
+
+paste0("Probability: ", predict_proba(model, x=image_tensor))
+paste0("Predicted class: ", predict_classes(model, x=image_tensor))
+
