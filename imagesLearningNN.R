@@ -148,6 +148,8 @@ valid_samples = valid_image_array_gen$n
 batch_size = 32
 epochs = 30
 
+early_stopping <- callback_early_stopping(monitor = 'val_loss', patience = 10)
+
 # fit
 hist <- model %>% fit_generator(
   # training data
@@ -160,7 +162,38 @@ hist <- model %>% fit_generator(
   # validation data
   validation_data = valid_image_array_gen,
   validation_steps = as.integer(valid_samples / batch_size),
+  
+  # callbacks
+  callbacks = c(early_stopping)
 )
 
-plot(history)
+plot(hist)
 
+model %>% save_model_hdf5("modelCNN.h5")
+model = load_model_hdf5("modelCNN.h5", compile = TRUE)
+
+# Test with new data
+x_test = list()
+y_test = array()
+
+for(class_name in c('car', 'cat', 'flower')) {
+  for(i in 1:10) {
+    path = file.path(getwd(), 'images_test_exterieur', class_name, paste(class_name, i, '.jpg', sep = ""))
+    img = readImage(path)
+    img = resizeImage(img, width = 100, height = 100, method = 'bilinear')
+    ind = i
+    if(equals(class_name, 'cat')) {
+      ind = ind + 10
+    }
+    if(equals(class_name, 'flower')) {
+      ind = ind + 20
+    }
+    x_test[[ind]] = img
+    y_test[ind] = class_name
+  }
+}
+
+img_test2 = array(0, dim = c(2, 100, 100, 3))
+img_test = image_load(file.path(getwd(), 'images_test_exterieur', 'cat', 'cat10.jpg'), target_size = c(100, 100), interpolation = 'bilinear')
+img_test2[1,,,] = image_to_array(img_test)
+y = predict_classes(model, img_test2[,,,])
