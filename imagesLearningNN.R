@@ -92,7 +92,7 @@ plot(history)
 # Evaluation of model
 model %>% evaluate(x_test, y_test,verbose = 0)
 
-## CNN model
+## CNN model =======================================================
 # Read images
 train_image_array_gen = flow_images_from_directory(directory = "images_train", generator = image_data_generator(rescale = 1/255),
                                                    target_size = c(100, 100), color_mode = "rgb", classes = NULL,
