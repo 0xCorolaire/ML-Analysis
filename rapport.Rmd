@@ -1,0 +1,31 @@
+---
+title: "Rapport TP"
+author: "PAIGNEAU Hugo - XIE Yijue - CAI Bolun"
+geometry: margin=1cm
+output:
+  pdf_document: default
+  html_notebook: default
+editor_options:
+  chunk_output_type: inline
+---
+
+# Introduction
+
+
+# Astronomic dataset, a classification problem
+## Data analysis
+
+
+
+
+# Corn Cultivation, regression to predict annual corn anomalies
+
+
+# 3-Classes images classification problem
+
+
+
+
+```{r}
+plot(cars)
+```
