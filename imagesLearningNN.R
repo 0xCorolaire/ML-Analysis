@@ -4,94 +4,6 @@ library(imager)
 
 install_keras()
 
-## Sequential model
-# Functions
-processImage = function(img) {
-  # Convert to grey
-  output = rgb_2gray(img)
-  # Resize
-  output = resizeImage(output, width = 100, height = 100, method = 'bilinear')
-  # Convert to vector
-  output = as.vector(output)
-  # Cast to numeric
-  output = as.numeric(output)
-  # Return
-  return(output)
-}
-
-# Read images
-nb_cats = 590
-nb_cars = 485
-nb_flowers = 521
-
-data = matrix(ncol = 10001, nrow = nb_cats + nb_cars + nb_flowers)
-
-# 0 = cat
-# 1 = car
-# 2 = flower
-for (i in 1:nb_cats) {
-  filename = paste('cat_train_', i, '.jpg', sep = "")
-  path = file.path(getwd(), 'images_train', 'cat', filename)
-  img = readImage(path)
-  img = processImage(img)
-  img[10001] = 0
-  data[i,] = img
-}
-
-for (i in 1:nb_cars) {
-  filename = paste('car_train_', i, '.jpg', sep = "")
-  path = file.path(getwd(), 'images_train', 'car', filename)
-  img = readImage(path)
-  img = processImage(img)
-  img[10001] = 1
-  data[nb_cats + i,] = img
-}
-
-for (i in 1:nb_flowers) {
-  filename = paste('flower_train_', i, '.jpg', sep = "")
-  path = file.path(getwd(), 'images_train', 'flower', filename)
-  img = readImage(path)
-  img = processImage(img)
-  img[10001] = 2
-  data[i + nb_cars + nb_cats,] = img
-}
-
-x_train <- data[, -10001]
-y_train <- data[, 10001]
-y_train <- to_categorical(y_train, 3)
-
-#y_train <- to_categorical(data, 10001)
-
-# Here we consider the simplest model (linear stack of layers)
-model <- keras_model_sequential() 
-model %>% 
-  layer_dense(units = 625, activation = "relu", input_shape = c(10000)) %>% 
-  layer_dropout(rate = 0.4) %>%
-  layer_dense(units = 312, activation = "relu") %>%
-  layer_dropout(rate = 0.4) %>%
-  layer_dense(units = 3, activation = "softmax")
-
-summary(model)
-
-# Compile the model
-model %>% compile(
-  loss = "categorical_crossentropy",
-  optimizer = optimizer_rmsprop(),
-  metrics = c("accuracy")
-)
-
-# Training
-history <- model %>% fit(
-  x_train, y_train, 
-  epochs = 100, batch_size = 20,
-  validation_split = 0.2
-)
-
-plot(history)
-
-# Evaluation of model
-model %>% evaluate(x_test, y_test,verbose = 0)
-
 ## CNN model =======================================================
 # Read images
 train_image_array_gen = flow_images_from_directory(directory = "images_train", generator = image_data_generator(rescale = 1/255),
@@ -109,10 +21,10 @@ valid_image_array_gen = flow_images_from_directory(directory = "images_validatio
 
 # CNN model (Convolutional NN)
 # initialise model
-model <- keras_model_sequential()
+modelCNN <- keras_model_sequential()
 
 # add layers
-model %>%
+modelCNN %>%
   layer_conv_2d(filter = 32, kernel_size = c(3,3), padding = "same", input_shape = c(100, 100, 3)) %>%
   layer_activation("relu") %>%
   
@@ -137,7 +49,7 @@ model %>%
   layer_activation("softmax")
 
 # compile
-model %>% compile(
+modelCNN %>% compile(
   loss = "categorical_crossentropy",
   optimizer = optimizer_rmsprop(lr = 0.0001, decay = 1e-6),
   metrics = "accuracy"
@@ -148,10 +60,10 @@ valid_samples = valid_image_array_gen$n
 batch_size = 32
 epochs = 30
 
-early_stopping <- callback_early_stopping(monitor = 'val_loss', patience = 10)
+early_stopping <- callback_early_stopping(monitor = 'val_loss', patience = 3)
 
 # fit
-hist <- model %>% fit_generator(
+hist <- modelCNN %>% fit_generator(
   # training data
   train_image_array_gen,
   
@@ -169,8 +81,8 @@ hist <- model %>% fit_generator(
 
 plot(hist)
 
-model %>% save_model_hdf5("modelCNN.h5")
-model = load_model_hdf5("modelCNN.h5", compile = TRUE)
+modelCNN %>% save_model_hdf5("modelCNN.h5")
+modelCNN = load_model_hdf5("modelCNN.h5", compile = TRUE)
 
 # Test with new data
 x_test = list()
@@ -196,17 +108,17 @@ for(class_name in c('car', 'cat', 'flower')) {
 img_test2 = array(0, dim = c(2, 100, 100, 3))
 img_test = image_load(file.path(getwd(), 'images_test_exterieur', 'cat', 'cat10.jpg'), target_size = c(100, 100), interpolation = 'bilinear')
 img_test2[1,,,] = image_to_array(img_test)
-y = predict_classes(model, img_test2[,,,])
+y = predict_classes(modelCNN, img_test2[,,,])
 
 
 
-image_path <- file.path(file.path(getwd(), 'images_test_exterieur', 'car', 'car5.jpg'))
+image_path <- file.path(file.path(getwd(), 'images_test_exterieur', 'cat', 'cat8.jpg'))
 test_image <- image_load(image_path, target_size = c(100,100))
 image_tensor <- image_to_array(test_image)
 image_tensor <- array_reshape(image_tensor, c(1, c(100,100), 3))
 image_tensor <- image_tensor / 255
 plot(as.raster(image_tensor[1,,,]))
 
-paste0("Probability: ", predict_proba(model, x=image_tensor))
-paste0("Predicted class: ", predict_classes(model, x=image_tensor))
+paste0("Probability: ", predict_proba(modelCNN, x=image_tensor))
+paste0("Predicted class: ", predict_classes(modelCNN, x=image_tensor))
 
