@@ -1,4 +1,4 @@
-classifieur_mais <- function(dataset) {
+regresseur_mais <- function(dataset) {
   # Chargement de l environnement
   load("env.Rdata") 
   library(MASS)
@@ -9,18 +9,7 @@ classifieur_mais <- function(dataset) {
   return(predictions)
 }
 
-#TEST
-data <- read.csv(file="mais_train.csv", header = TRUE, sep = ",", row.names = 1)
-dataT <- read.table("mais.txt", sep = "" , header = T)
-dataT <- dataT[!(rownames(dataT) %in% rownames(data)),]
-
-errorSVMfinal <- classifieur_mais(dataT[,-2]) - dataT$yield_anomaly
-MSESVMfinal <- mean(errorSVMfinal^2)
-print(MSESVMfinal) #0.59
-
-
-
-classifieur_astronomy <- function(dataset) {
+classifieur_astronomie <- function(dataset) {
   # Chargement de l environnement
   load("env.Rdata") 
   library(MASS)
@@ -35,12 +24,26 @@ classifieur_astronomy <- function(dataset) {
   return(predictions)
 }
 
-#TEST
-data <- read.csv(file="astronomy_train.csv", header = TRUE, sep = ",")
-dataT <- read.csv(file="astro.csv", header = TRUE, sep = ",")
-dataT <- dataT[!(dataT$ra %in% data$ra),]
-
-confusionSVM <- table(dataT$class, classifieur_astronomy(dataT[,-14]))
-confusionSVM
-errSVM <- 1-sum(diag(confusionSVM))/nrow(dataT)
-errSVM
+classifieur_images <- function(list) {
+  library(keras)
+  library(jpeg)
+  
+  load("env.Rdata")
+  model = unserialize_model(modelClassifImage, custom_objects = NULL, compile = TRUE)
+  
+  n<-length(list)
+  dim_images <- c(200,200)
+  predictions <- rep(0, length(list))
+  for(i in 1:n){
+    images <- array(0, dim=c(2, dim_images[1], dim_images[2], 3))
+    images[1,,,] <- image_to_array(image_load(path=list[i], target_size=dim_images, interpolation = "bilinear"))
+    temp <- predict(model, images[,,,], batch_size = 2)[1,]
+    predictions[i] <- which.max(temp)
+  }
+  
+  predictions[predictions==1] = 'car'
+  predictions[predictions==2] = 'cat'
+  predictions[predictions==3] = 'flower'
+  
+  return(predictions)
+}
