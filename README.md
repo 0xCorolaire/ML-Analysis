@@ -4,13 +4,9 @@ Machine learning model building on 3 datasets
 
 - Astronomical data => Classification problem with 3 classes*
 
-- Maïs
+- MaÃ¯s
 
-- Photo => 3 types
+- Photo => 3-Class problem
 
-
-##Astronomical data
-
-nb data = 5000  
-nb class = 3 
-
+# ANALYSIS : 
+https://github.com/hugofloter/dataset-learningMethods/blob/master/rapport.pdf
